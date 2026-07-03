@@ -1,0 +1,793 @@
+#define M1 11 //pin declar
+#define M2 10
+#define M3 8
+#define M4 9
+#define button1 2
+#define linedelay 35
+#define LMSpeed 13
+#define RMSpeed 13
+#define maxLR 13
+#define maxSpeed 130
+#define cs 255
+#define delayspeed 255
+#define turndelay 10
+#define uturndelay 10
+
+
+int i;
+int x = 0;
+long long int t = 0;
+bool Rightfound = false;
+bool Leftfound = false;
+bool inv = false;
+int lastSpeedL = 0;
+int lastSpeedR = 0;
+void calibration();
+
+int value1 = 0, value2 = 0, value3 = 0, value4 = 0, value5 = 0, value6 = 0, value7 = 0, value8 = 0;
+int s1 = 0, s2 = 0, s3 = 0, s4 = 0, s5 = 0, s6 = 0, s7 = 0, s8 = 0;
+
+int s[8], smin[8] = {0, 0, 0, 0, 0, 0, 0, 0}, smax[8] = {1023, 1023, 1023, 1023, 1023, 1023, 1023, 1023};
+int ref[8];
+float error = 0, lasterror = 0, kp = 120, kd = 850, line = 0, PD = 0, PID = 0; // kp=115 kd=850
+long long int looptime = 0;
+long long int tlast = 0;
+int lm = LMSpeed;
+int rm = RMSpeed;
+
+void setup()
+{
+pinMode(A0, INPUT);
+  pinMode(A1, INPUT);
+  pinMode(A2, INPUT);
+  pinMode(A3, INPUT);
+  pinMode(A4, INPUT);
+  pinMode(A5, INPUT);
+  pinMode(A6, INPUT);
+  pinMode(A7, INPUT);
+  pinMode(M1, OUTPUT);
+  pinMode(M2, OUTPUT);
+  pinMode(M3, OUTPUT);
+  pinMode(M4, OUTPUT);
+  pinMode(button1, INPUT_PULLUP);
+    while (digitalRead(button1) == HIGH)
+  {
+  }
+  delay(200);
+ calibration();
+
+
+while (digitalRead(button1) == HIGH)
+  {
+  }
+
+}
+void loop()
+{
+
+  SensorRead();
+  invcondition();
+  condition();
+  normal_line_PD();
+}
+
+void SensorRead()
+{
+  if (inv == false)
+  {
+    value1 = analogRead(A0);
+    value2 = analogRead(A1);
+    value3 = analogRead(A2);
+    value4 = analogRead(A3);
+    value5 = analogRead(A4);
+    value6 = analogRead(A5);
+    value7 = analogRead(A6);
+    value8 = analogRead(A7);
+    if (value1 < ref[0])
+      s1 = 1;
+    else
+      s1 = 0;
+    if (value2 < ref[1])
+      s2 = 1;
+    else
+      s2 = 0;
+    if (value3 < ref[2])
+      s3 = 1;
+    else
+      s3 = 0;
+    if (value4 < ref[3])
+      s4 = 1;
+    else
+      s4 = 0;
+    if (value5 < ref[4])
+      s5 = 1;
+    else
+      s5 = 0;
+    if (value6 < ref[5])
+      s6 = 1;
+    else
+      s6 = 0;
+    if (value7 < ref[6])
+      s7 = 1;
+    else
+      s7 = 0;
+    if (value8 < ref[7])
+      s8 = 1;
+    else
+      s8 = 0;
+  }
+  else if (inv == true)
+  {
+    value1 = analogRead(A0);
+    value2 = analogRead(A1);
+    value3 = analogRead(A2);
+    value4 = analogRead(A3);
+    value5 = analogRead(A4);
+    value6 = analogRead(A5);
+    value7 = analogRead(A6);
+    value8 = analogRead(A7);
+    if (value1 < ref[0])
+      s1 = 0;
+    else
+      s1 = 1;
+    if (value2 < ref[1])
+      s2 = 0;
+    else
+      s2 = 1;
+    if (value3 < ref[2])
+      s3 = 0;
+    else
+      s3 = 1;
+    if (value4 < ref[3])
+      s4 = 0;
+    else
+      s4 = 1;
+    if (value5 < ref[4])
+      s5 = 0;
+    else
+      s5 = 1;
+    if (value6 < ref[5])
+      s6 = 0;
+    else
+      s6 = 1;
+    if (value7 < ref[6])
+      s7 = 0;
+    else
+      s7 = 1;
+    if (value8 < ref[7])
+      s8 = 0;
+    else
+      s8 = 1;
+  }
+}
+void calibration()
+{
+  long front = millis();
+  while ((millis() - front) < 400)
+  {
+    s[0] = analogRead(A0);
+    s[1] = analogRead(A1);
+    s[2] = analogRead(A2);
+    s[3] = analogRead(A3);
+    s[4] = analogRead(A4);
+    s[5] = analogRead(A5);
+    s[6] = analogRead(A6);
+    s[7] = analogRead(A7);
+
+    for (i = 0; i <= 7; i++)
+    {
+      if (s[i] > smin[i])
+        smin[i] = s[i];
+      if (s[i] < smax[i])
+        smax[i] = s[i];
+    }
+    motor(100, 100);
+  } // while end
+  Mbreak();
+  long back = millis();
+  while ((millis() - back) < 500)
+  {
+    s[0] = analogRead(A0);
+    s[1] = analogRead(A1);
+    s[2] = analogRead(A2);
+    s[3] = analogRead(A3);
+    s[4] = analogRead(A4);
+    s[5] = analogRead(A5);
+    s[6] = analogRead(A6);
+    s[7] = analogRead(A7);
+
+    for (i = 0; i <= 7; i++)
+    {
+      if (s[i] > smin[i])
+        smin[i] = s[i];
+      if (s[i] < smax[i])
+        smax[i] = s[i];
+    }
+    motor(-100, -100);
+  } // while end
+  Mbreak();
+  motor(0, 0);
+  delay(100);
+  for (i=0;i<8;i++)
+{
+  ref[i]=(smin[i]+smax[i])/2;
+}
+
+}
+void motor(int left, int right)
+{
+  if (left > maxSpeed)
+  {
+    left = maxSpeed;
+  }
+  if (left < -maxSpeed)
+  {
+    left = -maxSpeed;
+  }
+  if (right > maxSpeed)
+  {
+    right = maxSpeed;
+  }
+  if (right < -maxSpeed)
+  {
+    right = -maxSpeed;
+  }
+  lastSpeedL = left;
+  lastSpeedR = right;
+  int a = 0, b = 0, c = 0, d = 0;
+  if (left < 0)
+  {
+    a = left * -1;
+  }
+  else
+    b = left;
+
+  if (right < 0)
+    c = right * -1;
+  else
+    d = right;
+
+  analogWrite(M1, a);
+  analogWrite(M2, b);
+  analogWrite(M3, c);
+  analogWrite(M4, d);
+}
+//////////////////////////////////////////////Motor Code end/////////////////////////////////////////////////////////////////////
+
+//////////////////////////////////////////////Mbeak start///////////////////////////////////////////////////////////////////////
+void Mbreak()
+{
+  motor(0, 0);
+  delay(20);
+  motor(-10 * lm, -10 * rm);
+  delay(5);
+  motor(0, 0);
+}
+void normal_line_PD()
+{
+  SensorRead();
+  Leftfound = false;
+  Rightfound = false;
+
+  if ((s1 + s2 + s3 + s4 + s5 + s6 + s7 + s8) > 0)
+  {
+    looptime = millis() - tlast;
+    line = (s1 * 1 + s2 * 2.5 + s3 * 3.5 + s4 * 4 + s5 * 5 + s6 * 5.5 + s7 * 6.5 + s8 * 8) / (s1 + s2 + s3 + s4 + s5 + s6 + s7 + s8);
+    error = 4.5 - line;
+
+    PD = (error * kp) + (((error - lasterror) * kd) / looptime);
+    PID = PD;
+
+    motor((lm * 10 - PID), (rm * 10 + PID));
+    // if ((error <= 0.5) && (error >= (-0.5)))
+    if (error == 0)
+    {
+      x++;
+    }
+    else
+    {
+      x = 0;
+    }
+    lasterror = error;
+    tlast = millis();
+  }
+  if (x > 50)
+  {
+    lm = maxLR;
+    rm = maxLR;
+  }
+  else
+  {
+    lm = LMSpeed;
+    rm = RMSpeed;
+  }
+}
+void condition()
+{
+  if ((s4 + s5) >= 1 && (s8 == 1) && (s7 == 0 || s6 == 0) && (s1 + s2) == 0) // right45
+  {
+
+    delay(5);
+    SensorRead();
+    if ((s4 + s5) >= 1 && (s8 == 1) && (s7 == 0 || s6 == 0) && (s1 + s2) == 0) // right45 confirm
+    {
+
+      t = millis();
+      while (((millis() - t) < linedelay * 6) && ((s1 + s2 + s3 + s4 + s5 + s6 + s7 + s8) > 0))
+      {
+        SensorRead();
+        motor(100, 100);
+      }
+      delay(10);
+      SensorRead();
+      if ((s1 + s2 + s3 + s4 + s5 + s6 + s7 + s8) == 0)
+      {
+       
+        turnright45();
+        
+      }
+      else if (s1 + s2 + s3 + s4 + s5 + s6 + s7 + s8 >= 1)
+      {
+        
+        Ra45F();
+        
+      }
+    }
+  }
+  //////////////////////////////////////////// left 45 degree found.///////////////////////////////////////////////////
+
+  else if ((s4 + s5) >= 1 && (s1 == 1) && (s3 == 0 || s2 == 0) && (s7 + s8) == 0)
+  {
+
+    delay(5);
+    SensorRead();
+    if ((s4 + s5) >= 1 && (s1 == 1) && (s3 == 0 || s2 == 0) && (s7 + s8) == 0)
+    {
+
+      t = millis();
+      while (((millis() - t) < linedelay * 6) && ((s1 + s2 + s3 + s4 + s5 + s6 + s7 + s8) > 0))
+      {
+        SensorRead();
+        motor(100, 100);
+      }
+      delay(10);
+      SensorRead();
+      if ((s1 + s2 + s3 + s4 + s5 + s6 + s7 + s8) == 0)
+      {
+        
+        turnleft45();
+        
+      }
+      else if (s1 + s2 + s3 + s4 + s5 + s6 + s7 + s8 >= 1)
+      {
+
+        
+        Le45F();
+        
+      }
+    }
+  }
+  else if ((s2 + s3 >= 2) && (s1+s4+s5+s8==0) && (s6 + s7 >= 1)) // Y Found
+  {
+    motor(lastSpeedL, lastSpeedR);
+    delay(5);
+    SensorRead();
+    if ((s2 + s3 >= 2) && (s1+s4+s5+s8==0) && (s6 + s7 >= 1))
+    {
+         
+      t = millis();
+      while (((millis() - t) < linedelay * 3) && ((s1 + s2 + s3 + s4 + s5 + s6 + s7 + s8) > 0))
+      {
+        SensorRead();
+        motor(50, 50);
+      }
+      delay(10);
+      SensorRead();
+      if ((s1 + s2 + s3 + s4 + s5 + s6 + s7 + s8) == 0)
+      {
+        
+        Y_branch();
+        
+      
+      }
+      
+    }
+  }
+  else if ((s1 + s2 + s3 + s4 + s5) >= 4) // left found
+  {
+    motor(lastSpeedL, lastSpeedR);
+    delay(5);
+    SensorRead();
+    if ((s1 + s2 + s3 + s4 + s5) >= 4) // leftfound confirm
+    {
+      t = millis();
+      while ((millis() - t < linedelay))
+      {
+        SensorRead();
+        if ((s8 >= 1))
+        {
+          Rightfound = true;
+        }
+        else if ((s1 + s2) == 0)
+        {
+          break;
+        }
+        motor(cs, cs);
+      }
+      delay(15);
+      SensorRead();
+      if ((s1 + s2 + s3 + s4 + s5 + s6 + s7 + s8 >= 7) && (Rightfound == true)) // end found
+      {
+        
+        end();
+        
+      }
+      else if ((s1 == 0 && s2 == 0) && ((s3 + s4 + s5 + s6) >= 1) && (Rightfound == true)) // Plus found
+      {
+        
+        Plus_Branch();
+     
+      }
+
+      else if (((s1 + s2 + s3 + s4 + s5 + s6 + s7 + s8) == 0) && (Rightfound == true)) // T found
+      {
+       
+        T_Branch();
+       
+      }
+      //       else if ((s1 == 0 && s2 == 0) && ((s7+s8) >= 1) && (Rightfound == false))
+      // {
+      //   disp("Left Forward Right");
+      //  turnright();
+      //   disp("");
+      // }
+      else if ((s1 == 0 && s2 == 0) && ((s3 + s4 + s5 + s6) >= 1) && (Rightfound == false)) // Left forward found
+      {
+
+        
+        LeF_Branch();
+        
+      }
+
+      else if (((s1 + s2 + s3 + s4 + s5 + s6 + s7 + s8) == 0) && (Rightfound == false)) // Only left
+      {
+
+        
+        turnleft();
+       
+      }
+    }
+  }
+
+  ////////////////////////////////////Right Found////////////////////////////////////
+
+  else if ((s4 + s5 + s6 + s7 + s8) >= 4) // right found
+  {
+    motor(lastSpeedL, lastSpeedR);
+    delay(5);
+    SensorRead();
+    if ((s4 + s5 + s6 + s7 + s8) >= 4) // Rightfound confirm
+    {
+      t = millis();
+      while ((millis() - t <= linedelay))
+      {
+        SensorRead();
+        if ((s1 >= 1))
+        {
+          Leftfound = true;
+        }
+        else if ((s7 + s8) == 0)
+        {
+          break;
+        }
+        motor(cs, cs);
+      }
+      delay(15);
+      SensorRead();
+      if ((s1 + s2 + s3 + s4 + s5 + s6 + s7 + s8 >= 7) && (Leftfound == true)) // end found
+      {
+        
+        end();
+        
+      }
+      else if ((s7 == 0 && s8 == 0) && ((s3 + s4 + s5 + s6) >= 1) && (Leftfound == true)) // Plus found
+      {
+        
+        Plus_Branch();
+        
+      }
+
+      else if (((s1 + s2 + s3 + s4 + s5 + s6 + s7 + s8) == 0) && (Leftfound == true)) // T found
+      {
+       
+        T_Branch();
+        
+      }
+      // else if (s7 == 0 && s8 == 0 && ((s1+s2) >= 1) && (Leftfound == false)) // Right forward Left
+      // {
+      //   disp("Right F Left");
+      //  turnright();
+      //   disp("");
+      // }
+
+      else if (s7 == 0 && s8 == 0 && ((s3 + s4 + s5 + s6) >= 1) && (Leftfound == false)) // Right forward found
+      {
+       
+        RaF_Branch();
+        
+      }
+      else if (((s1 + s2 + s3 + s4 + s5 + s6 + s7 + s8) == 0) && (Leftfound == false)) // Only right
+      {
+        
+
+        turnright();
+        
+      }
+    }
+  }
+  else if ((s1 + s2 + s3 + s4 + s5 + s6 + s7 + s8) == 0)
+  {
+    
+
+    motor(lastSpeedL, lastSpeedR);
+    t = millis();
+    while (((s1 + s2 + s3 + s4 + s5 + s6 + s7 + s8) == 0) && ((millis() - t) < (linedelay)))
+    {
+      // if (D < 40 && D != 0)
+      // {
+      //motor(100, 100);
+      //SensorRead();
+      //D = lDist();
+      // }
+      // else
+      {
+        motor(lastSpeedL, lastSpeedR);
+        SensorRead();
+      }
+    }
+  }
+}
+void invcondition()
+{
+  t = true;
+  if ((s1 + s2 + s3 + s4 + s5 + s6 + s7 + s8) >= 6 && (s3 == 0 || s4 == 0 || s5 == 0 || s6 == 0))
+  {
+    motor(lastSpeedL, lastSpeedR);
+    delay(5);
+    SensorRead();
+    if ((s1 + s2 + s3 + s4 + s5 + s6 + s7 + s8) >= 6 && (s3 == 0 || s4 == 0 || s5 == 0 || s6 == 0))
+    {
+      if (inv == false)
+      {
+        inv = true;
+        lm = LMSpeed;
+        rm = RMSpeed;
+      }
+      else if (inv == true)
+      {
+        inv = false;
+        lm = LMSpeed;
+        rm = RMSpeed;
+      }
+    }
+  }
+  else if ((s1 + s2 + s3 + s4 + s5 + s6 + s7 + s8) >= 6 && (s3 == 0 || s4 == 0 || s5 == 0 || s6 == 0))
+  {
+    motor(lastSpeedL, lastSpeedR);
+    delay(5);
+    SensorRead();
+    if ((s1 + s2 + s3 + s4 + s5 + s6 + s7 + s8) >= 6 && (s3 == 0 || s4 == 0 || s5 == 0 || s6 == 0))
+    {
+      if (inv == false)
+      {
+        inv = true;
+        lm = LMSpeed;
+        rm = RMSpeed;
+      }
+      else if (inv == true)
+      {
+        inv = false;
+        lm = LMSpeed;
+        rm = RMSpeed;
+      }
+    }
+  }
+}
+void turnleft()
+{
+  motor(delayspeed, delayspeed);
+  delay(turndelay);
+  // motor(0, 0);
+  // delay(20);
+  Mbreak();
+
+  SensorRead();
+  t = millis();
+  while ((s4 + s5 >= 1))
+  {
+    motor(-123, 123);
+    SensorRead();
+  }
+  while ((s2 == 0) && ((millis() - t) < 650))
+  {
+    motor(-150, 150);
+    SensorRead();
+  }
+  Mbreak();
+  motor(150, -150);
+  delay(20);
+  // motor(0, 0);
+  // delay(10);
+  Leftfound = false;
+  Rightfound = false;
+}
+void turnright()
+{
+
+  motor(delayspeed,delayspeed);
+  delay(turndelay);
+  // motor(0, 0);
+  // delay(20);
+  // Mbreak();
+  SensorRead();
+  t = millis();
+  while ((s4 + s5 >= 1))
+  {
+    motor(123, -123);
+    SensorRead();
+  }
+  while ((s7 == 0) && ((millis() - t) < 750))
+  {
+    motor(150, -150);
+    SensorRead();
+  }
+  Mbreak();
+  // motor(-150, 150);
+  // delay(20);
+  // motor(0, 0);
+  // delay(10);
+  Leftfound = false;
+  Rightfound = false;
+}
+
+void uturn()
+{
+
+  motor(180, 180);
+  delay(uturndelay);
+  motor(0, 0);
+  delay(2);
+
+  Mbreak();
+  SensorRead();
+  t = millis();
+
+  while ((s8 == 0) && ((millis() - t) < 700))
+  {
+    motor(200, -200);
+    SensorRead();
+  }
+  Mbreak();
+  motor(-200, 200);
+  delay(30);
+  motor(0, 0);
+  delay(10);
+  Leftfound = false;
+  Rightfound = false;
+}
+
+void turnleft45()
+{
+  motor(0, 0);
+  delay(turndelay);
+  // motor(-10 * lm, -10 * rm);
+  // delay(3 * linedelay);
+  SensorRead();
+  t = millis();
+  // Mbreak();
+  while ((s1) >= 1)
+  {
+    motor(-120, 120);
+    SensorRead();
+  }
+  while ((s3 == 0) && ((millis() - t) < (750)))
+  {
+    motor(-150, 150);
+    SensorRead();
+  }
+  SensorRead();
+  motor(120, -120);
+  delay(30);
+  motor(0, 0);
+  delay(10);
+}
+
+void turnright45()
+{
+  motor(0, 0);
+  delay(turndelay);
+  SensorRead();
+  t = millis();
+  while ((s8 >= 1))
+  {
+    motor(120, -120);
+    SensorRead();
+  }
+  while ((s6 == 0) && (millis() - t) < 750)
+  {
+    motor(150, -150);
+    SensorRead();
+  }
+  motor(-120, 120);
+  delay(30);
+  motor(0, 0);
+  delay(10);
+}
+
+void end()
+{
+  SensorRead();
+  while (s1 + s2 + s3 + s4 + s5 + s6 + s7 + s8 >= 8)
+  {
+    SensorRead();
+    motor(0, 0);
+  }
+  Leftfound = false;
+  Rightfound = false;
+}
+void O_Branch()
+{
+  
+  turnright();
+  SensorRead();
+  while (s8 != 1)
+  {
+    normal_line_PD();
+  }
+  motor(200,200);
+  delay(40);
+  
+  turnright();
+  Mbreak();
+  
+}
+void T_Branch()
+{
+turnright();
+
+}
+void Plus_Branch()
+{
+
+normal_line_PD();
+  
+}
+void RaF_Branch()
+{
+ normal_line_PD();
+
+
+}
+void LeF_Branch()
+{
+ normal_line_PD();
+
+  
+}
+void Le45F()
+{
+normal_line_PD();
+}
+void Ra45F()
+{
+  turnright45();
+}
+void Y_branch()
+{
+turnright();
+}
+void Olympic()
+{
+  Mbreak();
+  delay(3000);
+}
